@@ -3903,14 +3903,874 @@ function asArray(value) {
 
 },{}]},{},[13]);
 </script>
+<script>(function (root, factory) {
+	if (typeof define === 'function' && define.amd) {
+		// AMD. Register as an anonymous module.
+		define(['leaflet'], factory);
+	} else if (typeof modules === 'object' && module.exports) {
+		// define a Common JS module that relies on 'leaflet'
+		module.exports = factory(require('leaflet'));
+	} else {
+		// Assume Leaflet is loaded into global object L already
+		factory(L);
+	}
+}(this, function (L) {
+	'use strict';
+
+	L.TileLayer.Provider = L.TileLayer.extend({
+		initialize: function (arg, options) {
+			var providers = L.TileLayer.Provider.providers;
+
+			var parts = arg.split('.');
+
+			var providerName = parts[0];
+			var variantName = parts[1];
+
+			if (!providers[providerName]) {
+				throw 'No such provider (' + providerName + ')';
+			}
+
+			var provider = {
+				url: providers[providerName].url,
+				options: providers[providerName].options
+			};
+
+			// overwrite values in provider from variant.
+			if (variantName && 'variants' in providers[providerName]) {
+				if (!(variantName in providers[providerName].variants)) {
+					throw 'No such variant of ' + providerName + ' (' + variantName + ')';
+				}
+				var variant = providers[providerName].variants[variantName];
+				var variantOptions;
+				if (typeof variant === 'string') {
+					variantOptions = {
+						variant: variant
+					};
+				} else {
+					variantOptions = variant.options;
+				}
+				provider = {
+					url: variant.url || provider.url,
+					options: L.Util.extend({}, provider.options, variantOptions)
+				};
+			}
+
+			// replace attribution placeholders with their values from toplevel provider attribution,
+			// recursively
+			var attributionReplacer = function (attr) {
+				if (attr.indexOf('{attribution.') === -1) {
+					return attr;
+				}
+				return attr.replace(/\{attribution.(\w*)\}/g,
+					function (match, attributionName) {
+						return attributionReplacer(providers[attributionName].options.attribution);
+					}
+				);
+			};
+			provider.options.attribution = attributionReplacer(provider.options.attribution);
+
+			// Compute final options combining provider options with any user overrides
+			var layerOpts = L.Util.extend({}, provider.options, options);
+			L.TileLayer.prototype.initialize.call(this, provider.url, layerOpts);
+		}
+	});
+
+	/**
+	 * Definition of providers.
+	 * see http://leafletjs.com/reference.html#tilelayer for options in the options map.
+	 */
+
+	L.TileLayer.Provider.providers = {
+		OpenStreetMap: {
+			url: '//{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+			options: {
+				maxZoom: 19,
+				attribution:
+					'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+			},
+			variants: {
+				Mapnik: {},
+				DE: {
+					url: '//{s}.tile.openstreetmap.de/tiles/osmde/{z}/{x}/{y}.png',
+					options: {
+						maxZoom: 18
+					}
+				},
+				CH: {
+					url: '//tile.osm.ch/switzerland/{z}/{x}/{y}.png',
+					options: {
+						maxZoom: 18,
+						bounds: [[45, 5], [48, 11]]
+					}
+				},
+				France: {
+					url: '//{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+					options: {
+						maxZoom: 20,
+						attribution: '&copy; Openstreetmap France | {attribution.OpenStreetMap}'
+					}
+				},
+				HOT: {
+					url: '//{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+					options: {
+						attribution:
+							'{attribution.OpenStreetMap}, ' +
+							'Tiles style by <a href="https://www.hotosm.org/" target="_blank">Humanitarian OpenStreetMap Team</a> ' +
+							'hosted by <a href="https://openstreetmap.fr/" target="_blank">OpenStreetMap France</a>'
+					}
+				},
+				BZH: {
+					url: '//tile.openstreetmap.bzh/br/{z}/{x}/{y}.png',
+					options: {
+						attribution: '{attribution.OpenStreetMap}, Tiles courtesy of <a href="http://www.openstreetmap.bzh/" target="_blank">Breton OpenStreetMap Team</a>',
+						bounds: [[46.2, -5.5], [50, 0.7]]
+					}
+				}
+			}
+		},
+		OpenSeaMap: {
+			url: '//tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
+			options: {
+				attribution: 'Map data: &copy; <a href="http://www.openseamap.org">OpenSeaMap</a> contributors'
+			}
+		},
+		OpenPtMap: {
+			url: 'http://openptmap.org/tiles/{z}/{x}/{y}.png',
+			options: {
+				maxZoom: 17,
+				attribution: 'Map data: &copy; <a href="http://www.openptmap.org">OpenPtMap</a> contributors'
+			}
+		},
+		OpenTopoMap: {
+			url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+			options: {
+				maxZoom: 17,
+				attribution: 'Map data: {attribution.OpenStreetMap}, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+			}
+		},
+		OpenRailwayMap: {
+			url: 'https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
+			options: {
+				maxZoom: 19,
+				attribution: 'Map data: {attribution.OpenStreetMap} | Map style: &copy; <a href="https://www.OpenRailwayMap.org">OpenRailwayMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+			}
+		},
+		OpenFireMap: {
+			url: 'http://openfiremap.org/hytiles/{z}/{x}/{y}.png',
+			options: {
+				maxZoom: 19,
+				attribution: 'Map data: {attribution.OpenStreetMap} | Map style: &copy; <a href="http://www.openfiremap.org">OpenFireMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+			}
+		},
+		SafeCast: {
+			url: '//s3.amazonaws.com/te512.safecast.org/{z}/{x}/{y}.png',
+			options: {
+				maxZoom: 16,
+				attribution: 'Map data: {attribution.OpenStreetMap} | Map style: &copy; <a href="https://blog.safecast.org/about/">SafeCast</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+			}
+		},
+		Thunderforest: {
+			url: 'https://{s}.tile.thunderforest.com/{variant}/{z}/{x}/{y}.png?apikey={apikey}',
+			options: {
+				attribution:
+					'&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, {attribution.OpenStreetMap}',
+				variant: 'cycle',
+				apikey: '<insert your api key here>',
+				maxZoom: 22
+			},
+			variants: {
+				OpenCycleMap: 'cycle',
+				Transport: {
+					options: {
+						variant: 'transport'
+					}
+				},
+				TransportDark: {
+					options: {
+						variant: 'transport-dark'
+					}
+				},
+				SpinalMap: {
+					options: {
+						variant: 'spinal-map'
+					}
+				},
+				Landscape: 'landscape',
+				Outdoors: 'outdoors',
+				Pioneer: 'pioneer',
+				MobileAtlas: 'mobile-atlas',
+				Neighbourhood: 'neighbourhood'
+			}
+		},
+		OpenMapSurfer: {
+			url: 'https://maps.heigit.org/openmapsurfer/tiles/{variant}/webmercator/{z}/{x}/{y}.png',
+			options: {
+				maxZoom: 19,
+				variant: 'roads',
+				attribution: 'Imagery from <a href="http://giscience.uni-hd.de/">GIScience Research Group @ University of Heidelberg</a> | Map data '
+			},
+			variants: {
+				Roads: {
+					options: {
+						variant: 'roads',
+						attribution: '{attribution.OpenMapSurfer}{attribution.OpenStreetMap}'
+					}
+				},
+				Hybrid: {
+					options: {
+						variant: 'hybrid',
+						attribution: '{attribution.OpenMapSurfer}{attribution.OpenStreetMap}'
+					}
+				},
+				AdminBounds: {
+					options: {
+						variant: 'adminb',
+						maxZoom: 18,
+						attribution: '{attribution.OpenMapSurfer}{attribution.OpenStreetMap}'
+					}
+				},
+				ContourLines: {
+					options: {
+						variant: 'asterc',
+						maxZoom: 18,
+						minZoom: 13,
+						attribution: '{attribution.OpenMapSurfer} <a href="https://lpdaac.usgs.gov/products/aster_policies">ASTER GDEM</a>'
+					}
+				},
+				Hillshade: {
+					options: {
+						variant: 'asterh',
+						maxZoom: 18,
+						attribution: '{attribution.OpenMapSurfer} <a href="https://lpdaac.usgs.gov/products/aster_policies">ASTER GDEM</a>, <a href="http://srtm.csi.cgiar.org/">SRTM</a>'
+					}
+				},
+				ElementsAtRisk: {
+					options: {
+						variant: 'elements_at_risk',
+						attribution: '{attribution.OpenMapSurfer}{attribution.OpenStreetMap}'
+					}
+				}
+			}
+		},
+		Hydda: {
+			url: '//{s}.tile.openstreetmap.se/hydda/{variant}/{z}/{x}/{y}.png',
+			options: {
+				maxZoom: 18,
+				variant: 'full',
+				attribution: 'Tiles courtesy of <a href="http://openstreetmap.se/" target="_blank">OpenStreetMap Sweden</a> &mdash; Map data {attribution.OpenStreetMap}'
+			},
+			variants: {
+				Full: 'full',
+				Base: 'base',
+				RoadsAndLabels: 'roads_and_labels'
+			}
+		},
+		MapBox: {
+			url: 'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}{r}.png?access_token={accessToken}',
+			options: {
+				attribution:
+					'<a href="https://www.mapbox.com/about/maps/" target="_blank">&copy; Mapbox</a> ' +
+					'{attribution.OpenStreetMap} ' +
+					'<a href="https://www.mapbox.com/map-feedback/" target="_blank">Improve this map</a>',
+				subdomains: 'abcd',
+				id: 'mapbox.streets',
+				accessToken: '<insert your access token here>',
+			}
+		},
+		Stamen: {
+			url: '//stamen-tiles-{s}.a.ssl.fastly.net/{variant}/{z}/{x}/{y}{r}.{ext}',
+			options: {
+				attribution:
+					'Map tiles by <a href="http://stamen.com">Stamen Design</a>, ' +
+					'<a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; ' +
+					'Map data {attribution.OpenStreetMap}',
+				subdomains: 'abcd',
+				minZoom: 0,
+				maxZoom: 20,
+				variant: 'toner',
+				ext: 'png'
+			},
+			variants: {
+				Toner: 'toner',
+				TonerBackground: 'toner-background',
+				TonerHybrid: 'toner-hybrid',
+				TonerLines: 'toner-lines',
+				TonerLabels: 'toner-labels',
+				TonerLite: 'toner-lite',
+				Watercolor: {
+					url: '//stamen-tiles-{s}.a.ssl.fastly.net/{variant}/{z}/{x}/{y}.{ext}',
+					options: {
+						variant: 'watercolor',
+						ext: 'jpg',
+						minZoom: 1,
+						maxZoom: 16
+					}
+				},
+				Terrain: {
+					options: {
+						variant: 'terrain',
+						minZoom: 0,
+						maxZoom: 18
+					}
+				},
+				TerrainBackground: {
+					options: {
+						variant: 'terrain-background',
+						minZoom: 0,
+						maxZoom: 18
+					}
+				},
+				TerrainLabels: {
+					options: {
+						variant: 'terrain-labels',
+						minZoom: 0,
+						maxZoom: 18
+					}
+				},
+				TopOSMRelief: {
+					url: '//stamen-tiles-{s}.a.ssl.fastly.net/{variant}/{z}/{x}/{y}.{ext}',
+					options: {
+						variant: 'toposm-color-relief',
+						ext: 'jpg',
+						bounds: [[22, -132], [51, -56]]
+					}
+				},
+				TopOSMFeatures: {
+					options: {
+						variant: 'toposm-features',
+						bounds: [[22, -132], [51, -56]],
+						opacity: 0.9
+					}
+				}
+			}
+		},
+		TomTom: {
+			url: 'https://{s}.api.tomtom.com/map/1/tile/{variant}/{style}/{z}/{x}/{y}.{ext}?key={apikey}',
+			options: {
+				variant: 'basic',
+				maxZoom: 22,
+				attribution:
+					'<a href="https://tomtom.com" target="_blank">&copy;  1992 - ' + new Date().getFullYear() + ' TomTom.</a> ',
+				subdomains: 'abcd',
+				style: 'main',
+				ext: 'png',
+				apikey: '<insert your API key here>',
+			},
+			variants: {
+				Basic: 'basic',
+				Hybrid: 'hybrid',
+				Labels: 'labels'
+			}
+		},
+		Esri: {
+			url: '//server.arcgisonline.com/ArcGIS/rest/services/{variant}/MapServer/tile/{z}/{y}/{x}',
+			options: {
+				variant: 'World_Street_Map',
+				attribution: 'Tiles &copy; Esri'
+			},
+			variants: {
+				WorldStreetMap: {
+					options: {
+						attribution:
+							'{attribution.Esri} &mdash; ' +
+							'Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
+					}
+				},
+				DeLorme: {
+					options: {
+						variant: 'Specialty/DeLorme_World_Base_Map',
+						minZoom: 1,
+						maxZoom: 11,
+						attribution: '{attribution.Esri} &mdash; Copyright: &copy;2012 DeLorme'
+					}
+				},
+				WorldTopoMap: {
+					options: {
+						variant: 'World_Topo_Map',
+						attribution:
+							'{attribution.Esri} &mdash; ' +
+							'Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community'
+					}
+				},
+				WorldImagery: {
+					options: {
+						variant: 'World_Imagery',
+						attribution:
+							'{attribution.Esri} &mdash; ' +
+							'Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+					}
+				},
+				WorldTerrain: {
+					options: {
+						variant: 'World_Terrain_Base',
+						maxZoom: 13,
+						attribution:
+							'{attribution.Esri} &mdash; ' +
+							'Source: USGS, Esri, TANA, DeLorme, and NPS'
+					}
+				},
+				WorldShadedRelief: {
+					options: {
+						variant: 'World_Shaded_Relief',
+						maxZoom: 13,
+						attribution: '{attribution.Esri} &mdash; Source: Esri'
+					}
+				},
+				WorldPhysical: {
+					options: {
+						variant: 'World_Physical_Map',
+						maxZoom: 8,
+						attribution: '{attribution.Esri} &mdash; Source: US National Park Service'
+					}
+				},
+				OceanBasemap: {
+					options: {
+						variant: 'Ocean_Basemap',
+						maxZoom: 13,
+						attribution: '{attribution.Esri} &mdash; Sources: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ, and Esri'
+					}
+				},
+				NatGeoWorldMap: {
+					options: {
+						variant: 'NatGeo_World_Map',
+						maxZoom: 16,
+						attribution: '{attribution.Esri} &mdash; National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC'
+					}
+				},
+				WorldGrayCanvas: {
+					options: {
+						variant: 'Canvas/World_Light_Gray_Base',
+						maxZoom: 16,
+						attribution: '{attribution.Esri} &mdash; Esri, DeLorme, NAVTEQ'
+					}
+				}
+			}
+		},
+		OpenWeatherMap: {
+			url: 'http://{s}.tile.openweathermap.org/map/{variant}/{z}/{x}/{y}.png?appid={apiKey}',
+			options: {
+				maxZoom: 19,
+				attribution: 'Map data &copy; <a href="http://openweathermap.org">OpenWeatherMap</a>',
+				apiKey:'<insert your api key here>',
+				opacity: 0.5
+			},
+			variants: {
+				Clouds: 'clouds',
+				CloudsClassic: 'clouds_cls',
+				Precipitation: 'precipitation',
+				PrecipitationClassic: 'precipitation_cls',
+				Rain: 'rain',
+				RainClassic: 'rain_cls',
+				Pressure: 'pressure',
+				PressureContour: 'pressure_cntr',
+				Wind: 'wind',
+				Temperature: 'temp',
+				Snow: 'snow'
+			}
+		},
+		HERE: {
+			/*
+			 * HERE maps, formerly Nokia maps.
+			 * These basemaps are free, but you need an API key. Please sign up at
+			 * https://developer.here.com/plans
+			 */
+			url:
+				'https://{s}.{base}.maps.api.here.com/maptile/2.1/' +
+				'{type}/{mapID}/{variant}/{z}/{x}/{y}/{size}/{format}?' +
+				'app_id={app_id}&app_code={app_code}&lg={language}',
+			options: {
+				attribution:
+					'Map &copy; 1987-' + new Date().getFullYear() + ' <a href="http://developer.here.com">HERE</a>',
+				subdomains: '1234',
+				mapID: 'newest',
+				'app_id': '<insert your app_id here>',
+				'app_code': '<insert your app_code here>',
+				base: 'base',
+				variant: 'normal.day',
+				maxZoom: 20,
+				type: 'maptile',
+				language: 'eng',
+				format: 'png8',
+				size: '256'
+			},
+			variants: {
+				normalDay: 'normal.day',
+				normalDayCustom: 'normal.day.custom',
+				normalDayGrey: 'normal.day.grey',
+				normalDayMobile: 'normal.day.mobile',
+				normalDayGreyMobile: 'normal.day.grey.mobile',
+				normalDayTransit: 'normal.day.transit',
+				normalDayTransitMobile: 'normal.day.transit.mobile',
+				normalDayTraffic: {
+					options: {
+						variant: 'normal.traffic.day',
+						base: 'traffic',
+						type: 'traffictile'
+					}
+				},
+				normalNight: 'normal.night',
+				normalNightMobile: 'normal.night.mobile',
+				normalNightGrey: 'normal.night.grey',
+				normalNightGreyMobile: 'normal.night.grey.mobile',
+				normalNightTransit: 'normal.night.transit',
+				normalNightTransitMobile: 'normal.night.transit.mobile',
+				reducedDay: 'reduced.day',
+				reducedNight: 'reduced.night',
+				basicMap: {
+					options: {
+						type: 'basetile'
+					}
+				},
+				mapLabels: {
+					options: {
+						type: 'labeltile',
+						format: 'png'
+					}
+				},
+				trafficFlow: {
+					options: {
+						base: 'traffic',
+						type: 'flowtile'
+					}
+				},
+				carnavDayGrey: 'carnav.day.grey',
+				hybridDay: {
+					options: {
+						base: 'aerial',
+						variant: 'hybrid.day'
+					}
+				},
+				hybridDayMobile: {
+					options: {
+						base: 'aerial',
+						variant: 'hybrid.day.mobile'
+					}
+				},
+				hybridDayTransit: {
+					options: {
+						base: 'aerial',
+						variant: 'hybrid.day.transit'
+					}
+				},
+				hybridDayGrey: {
+					options: {
+						base: 'aerial',
+						variant: 'hybrid.grey.day'
+					}
+				},
+				hybridDayTraffic: {
+					options: {
+						variant: 'hybrid.traffic.day',
+						base: 'traffic',
+						type: 'traffictile'
+					}
+				},
+				pedestrianDay: 'pedestrian.day',
+				pedestrianNight: 'pedestrian.night',
+				satelliteDay: {
+					options: {
+						base: 'aerial',
+						variant: 'satellite.day'
+					}
+				},
+				terrainDay: {
+					options: {
+						base: 'aerial',
+						variant: 'terrain.day'
+					}
+				},
+				terrainDayMobile: {
+					options: {
+						base: 'aerial',
+						variant: 'terrain.day.mobile'
+					}
+				}
+			}
+		},
+		FreeMapSK: {
+			url: 'http://t{s}.freemap.sk/T/{z}/{x}/{y}.jpeg',
+			options: {
+				minZoom: 8,
+				maxZoom: 16,
+				subdomains: '1234',
+				bounds: [[47.204642, 15.996093], [49.830896, 22.576904]],
+				attribution:
+					'{attribution.OpenStreetMap}, vizualization CC-By-SA 2.0 <a href="http://freemap.sk">Freemap.sk</a>'
+			}
+		},
+		MtbMap: {
+			url: 'http://tile.mtbmap.cz/mtbmap_tiles/{z}/{x}/{y}.png',
+			options: {
+				attribution:
+					'{attribution.OpenStreetMap} &amp; USGS'
+			}
+		},
+		CartoDB: {
+			url: 'https://{s}.basemaps.cartocdn.com/{variant}/{z}/{x}/{y}{r}.png',
+			options: {
+				attribution: '{attribution.OpenStreetMap} &copy; <a href="https://carto.com/attributions">CARTO</a>',
+				subdomains: 'abcd',
+				maxZoom: 19,
+				variant: 'light_all'
+			},
+			variants: {
+				Positron: 'light_all',
+				PositronNoLabels: 'light_nolabels',
+				PositronOnlyLabels: 'light_only_labels',
+				DarkMatter: 'dark_all',
+				DarkMatterNoLabels: 'dark_nolabels',
+				DarkMatterOnlyLabels: 'dark_only_labels',
+				Voyager: 'rastertiles/voyager',
+				VoyagerNoLabels: 'rastertiles/voyager_nolabels',
+				VoyagerOnlyLabels: 'rastertiles/voyager_only_labels',
+				VoyagerLabelsUnder: 'rastertiles/voyager_labels_under'
+			}
+		},
+		HikeBike: {
+			url: 'https://tiles.wmflabs.org/{variant}/{z}/{x}/{y}.png',
+			options: {
+				maxZoom: 19,
+				attribution: '{attribution.OpenStreetMap}',
+				variant: 'hikebike'
+			},
+			variants: {
+				HikeBike: {},
+				HillShading: {
+					options: {
+						maxZoom: 15,
+						variant: 'hillshading'
+					}
+				}
+			}
+		},
+		BasemapAT: {
+			url: '//maps{s}.wien.gv.at/basemap/{variant}/normal/google3857/{z}/{y}/{x}.{format}',
+			options: {
+				maxZoom: 19,
+				attribution: 'Datenquelle: <a href="https://www.basemap.at">basemap.at</a>',
+				subdomains: ['', '1', '2', '3', '4'],
+				format: 'png',
+				bounds: [[46.358770, 8.782379], [49.037872, 17.189532]],
+				variant: 'geolandbasemap'
+			},
+			variants: {
+				basemap: {
+					options: {
+						maxZoom: 20, // currently only in Vienna
+						variant: 'geolandbasemap'
+					}
+				},
+				grau: 'bmapgrau',
+				overlay: 'bmapoverlay',
+				highdpi: {
+					options: {
+						variant: 'bmaphidpi',
+						format: 'jpeg'
+					}
+				},
+				orthofoto: {
+					options: {
+						maxZoom: 20, // currently only in Vienna
+						variant: 'bmaporthofoto30cm',
+						format: 'jpeg'
+					}
+				}
+			}
+		},
+		nlmaps: {
+			url: '//geodata.nationaalgeoregister.nl/tiles/service/wmts/{variant}/EPSG:3857/{z}/{x}/{y}.png',
+			options: {
+				minZoom: 6,
+				maxZoom: 19,
+				bounds: [[50.5, 3.25], [54, 7.6]],
+				attribution: 'Kaartgegevens &copy; <a href="kadaster.nl">Kadaster</a>'
+			},
+			variants: {
+				'standaard': 'brtachtergrondkaart',
+				'pastel': 'brtachtergrondkaartpastel',
+				'grijs': 'brtachtergrondkaartgrijs',
+				'luchtfoto': {
+					'url': '//geodata.nationaalgeoregister.nl/luchtfoto/rgb/wmts/1.0.0/2016_ortho25/EPSG:3857/{z}/{x}/{y}.png',
+				}
+			}
+		},
+		NASAGIBS: {
+			url: 'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/{variant}/default/{time}/{tilematrixset}{maxZoom}/{z}/{y}/{x}.{format}',
+			options: {
+				attribution:
+					'Imagery provided by services from the Global Imagery Browse Services (GIBS), operated by the NASA/GSFC/Earth Science Data and Information System ' +
+					'(<a href="https://earthdata.nasa.gov">ESDIS</a>) with funding provided by NASA/HQ.',
+				bounds: [[-85.0511287776, -179.999999975], [85.0511287776, 179.999999975]],
+				minZoom: 1,
+				maxZoom: 9,
+				format: 'jpg',
+				time: '',
+				tilematrixset: 'GoogleMapsCompatible_Level'
+			},
+			variants: {
+				ModisTerraTrueColorCR: 'MODIS_Terra_CorrectedReflectance_TrueColor',
+				ModisTerraBands367CR: 'MODIS_Terra_CorrectedReflectance_Bands367',
+				ViirsEarthAtNight2012: {
+					options: {
+						variant: 'VIIRS_CityLights_2012',
+						maxZoom: 8
+					}
+				},
+				ModisTerraLSTDay: {
+					options: {
+						variant: 'MODIS_Terra_Land_Surface_Temp_Day',
+						format: 'png',
+						maxZoom: 7,
+						opacity: 0.75
+					}
+				},
+				ModisTerraSnowCover: {
+					options: {
+						variant: 'MODIS_Terra_Snow_Cover',
+						format: 'png',
+						maxZoom: 8,
+						opacity: 0.75
+					}
+				},
+				ModisTerraAOD: {
+					options: {
+						variant: 'MODIS_Terra_Aerosol',
+						format: 'png',
+						maxZoom: 6,
+						opacity: 0.75
+					}
+				},
+				ModisTerraChlorophyll: {
+					options: {
+						variant: 'MODIS_Terra_Chlorophyll_A',
+						format: 'png',
+						maxZoom: 7,
+						opacity: 0.75
+					}
+				}
+			}
+		},
+		NLS: {
+			// NLS maps are copyright National library of Scotland.
+			// http://maps.nls.uk/projects/api/index.html
+			// Please contact NLS for anything other than non-commercial low volume usage
+			//
+			// Map sources: Ordnance Survey 1:1m to 1:63K, 1920s-1940s
+			//   z0-9  - 1:1m
+			//  z10-11 - quarter inch (1:253440)
+			//  z12-18 - one inch (1:63360)
+			url: '//nls-{s}.tileserver.com/nls/{z}/{x}/{y}.jpg',
+			options: {
+				attribution: '<a href="http://geo.nls.uk/maps/">National Library of Scotland Historic Maps</a>',
+				bounds: [[49.6, -12], [61.7, 3]],
+				minZoom: 1,
+				maxZoom: 18,
+				subdomains: '0123',
+			}
+		},
+		JusticeMap: {
+			// Justice Map (http://www.justicemap.org/)
+			// Visualize race and income data for your community, county and country.
+			// Includes tools for data journalists, bloggers and community activists.
+			url: 'http://www.justicemap.org/tile/{size}/{variant}/{z}/{x}/{y}.png',
+			options: {
+				attribution: '<a href="http://www.justicemap.org/terms.php">Justice Map</a>',
+				// one of 'county', 'tract', 'block'
+				size: 'county',
+				// Bounds for USA, including Alaska and Hawaii
+				bounds: [[14, -180], [72, -56]]
+			},
+			variants: {
+				income: 'income',
+				americanIndian: 'indian',
+				asian: 'asian',
+				black: 'black',
+				hispanic: 'hispanic',
+				multi: 'multi',
+				nonWhite: 'nonwhite',
+				white: 'white',
+				plurality: 'plural'
+			}
+		},
+		Wikimedia: {
+			url: 'https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}{r}.png',
+			options: {
+				attribution: '<a href="https://wikimediafoundation.org/wiki/Maps_Terms_of_Use">Wikimedia</a>',
+				minZoom: 1,
+				maxZoom: 19
+			}
+		},
+		GeoportailFrance: {
+			url: 'https://wxs.ign.fr/{apikey}/geoportail/wmts?REQUEST=GetTile&SERVICE=WMTS&VERSION=1.0.0&STYLE={style}&TILEMATRIXSET=PM&FORMAT={format}&LAYER={variant}&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+			options: {
+				attribution: '<a target="_blank" href="https://www.geoportail.gouv.fr/">Geoportail France</a>',
+				bounds: [[-75, -180], [81, 180]],
+				minZoom: 2,
+				maxZoom: 18,
+				// Get your own geoportail apikey here : http://professionnels.ign.fr/ign/contrats/
+				// NB : 'choisirgeoportail' is a demonstration key that comes with no guarantee
+				apikey: 'choisirgeoportail',
+				format: 'image/jpeg',
+				style : 'normal',
+				variant: 'GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN-EXPRESS.STANDARD'
+			},
+			variants: {
+				parcels: {
+					options : {
+						variant: 'CADASTRALPARCELS.PARCELS',
+						maxZoom: 20,
+						style : 'bdparcellaire',
+						format: 'image/png'
+					}
+				},
+				ignMaps: 'GEOGRAPHICALGRIDSYSTEMS.MAPS',
+				maps: 'GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN-EXPRESS.STANDARD',
+				orthos: {
+					options: {
+						maxZoom: 19,
+						variant: 'ORTHOIMAGERY.ORTHOPHOTOS'
+					}
+				}
+			}
+		},
+		OneMapSG: {
+			url: '//maps-{s}.onemap.sg/v3/{variant}/{z}/{x}/{y}.png',
+			options: {
+				variant: 'Default',
+				minZoom: 11,
+				maxZoom: 18,
+				bounds: [[1.56073, 104.11475], [1.16, 103.502]],
+				attribution: '<img src="https://docs.onemap.sg/maps/images/oneMap64-01.png" style="height:20px;width:20px;"/> New OneMap | Map data &copy; contributors, <a href="http://SLA.gov.sg">Singapore Land Authority</a>'
+			},
+			variants: {
+				Default: 'Default',
+				Night: 'Night',
+				Original: 'Original',
+				Grey: 'Grey',
+				LandLot: 'LandLot'
+			}
+		}
+	};
+
+	L.tileLayer.provider = function (provider, options) {
+		return new L.TileLayer.Provider(provider, options);
+	};
+
+	return L;
+}));
+</script>
+<script>LeafletWidget.methods.addProviderTiles = function(provider, layerId, group, options) {
+  this.layerManager.addLayer(L.tileLayer.provider(provider, options), "tile", layerId, group);
+};
+</script>
 </head>
 <body style="background-color: white;">
 <div id="htmlwidget_container">
-<div id="htmlwidget-f0d01cbe36897dac35c2" class="leaflet html-widget" style="width:100%;height:400px;">
+<div id="htmlwidget-007b2ba43976876176d3" class="leaflet html-widget" style="width:100%;height:400px;">
 
 </div>
 </div>
-<script type="application/json" data-for="htmlwidget-f0d01cbe36897dac35c2">{"x":{"options":{"crs":{"crsClass":"L.CRS.EPSG3857","code":null,"proj4def":null,"projectedBounds":null,"options":{}}},"calls":[{"method":"addTiles","args":["https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png",null,"Map",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":false,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false,"attribution":"&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap<\/a> contributors &copy; <a href=\"https://carto.com/attributions\">CARTO<\/a>"}]},{"method":"addTiles","args":["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",null,"Imagery",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":false,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false,"attribution":"Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"}]},{"method":"addTiles","args":["https://mazu.nceas.ucsb.edu/wastewater/FIO_effluent/{z}/{x}/{y}.png",null,"FIO source",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":true,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false}]},{"method":"addTiles","args":["https://mazu.nceas.ucsb.edu/wastewater/N_effluent/{z}/{x}/{y}.png",null,"Nitrogen source",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":true,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false}]},{"method":"addTiles","args":["https://mazu.nceas.ucsb.edu/wastewater/FIO_plumes/{z}/{x}/{y}.png",null,"FIO plumes",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":true,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false}]},{"method":"addTiles","args":["https://mazu.nceas.ucsb.edu/wastewater/N_plumes/{z}/{x}/{y}.png",null,"Nitrogen plumes",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":true,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false}]},{"method":"addLegend","args":[{"colors":["#ffffad","#e9a500","#533100","#311a00","#00c634"],"labels":["> 0","0.13","0.39","0.62","2.05"],"na_color":null,"na_label":"NA","opacity":0.9,"position":"bottomleft","type":"unknown","title":"FIO","extra":null,"layerId":null,"className":"info legend","group":"FIO"}]},{"method":"addTiles","args":["https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png",null,"Place Names",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":false,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":0.35,"zIndex":1,"detectRetina":false}]},{"method":"addCircleMarkers","args":[[22.7789481668791,31.9435019927264,31.2915443490667,24.0600512590136,4.30700513043226,22.2033716697359,37.7663370463148,-6.05578206204655,15.7664609936265,16.7247669676389,53.1260961704591,23.734588154819,45.2397054518908,12.9649492932609,-18.7944131940188,45.6935260393618,38.7633422054301,16.0042110684916,43.691029395214,34.6483393885383,-34.0058875702767,43.7780271013294,21.9497950303371,29.9373672944778,40.0075213740855,39.0932287667134,10.2114010785921,-0.242460879572887,20.3038195218766,11.3643186876756,21.1548772927068,-0.655024560245932,34.4438439855339,46.5161675827207,31.3857806976889,40.9532550905203,11.6292403822232,22.1181434585625,21.656305889993,30.3790389186769,66.7890110985508,38.26892066412,5.95312501297857,31.4752509647119,22.9904989312565,20.2962187305727,39.3580589209818,51.7195133989005,39.9678394564855,47.144250088318,-25.1916574286487,22.2290778371454,16.5364600552916,26.1300362840712,11.1091563313404,14.5964853335245,-28.6200504289136,37.7621278933377,16.0466025827776,54.2700778662875,40.0042192004059,-10.4945762019839,6.41819221779139,46.0791753199362,23.3961399230048,22.2914586581584,-3.15465864539301,38.1956247666637,20.7852738154694,70.0570970486711,21.6344619090671,28.9426086594032,45.3188316432485,11.776693625502,38.6877463832315,4.64508268658366,4.86001551726502,44.8373446662154,40.5304601980106,22.3341121436566,12.4684040810253,39.4251446954708,35.6776444213018,49.4782823967192,34.7092526568523,-2.51929638442138,-21.61886723146,37.2772899277229,53.5999446510318,18.6747745532555,45.9460412399957,21.5616268541398,40.690391707397,3.7727385242586,22.2247635394064,5.25264218116306,10.4740980291567,17.9386755575204,6.41729004883286,-21.0520682309922],[90.7473396331288,120.258344007731,30.254591502087,67.4152702311979,6.22985943924716,113.40262766623,119.208561385331,12.4407065777401,81.002151664495,82.3471770722109,140.72238913343,68.4201642054009,29.7207040750822,14.4543179653997,36.2536708903772,47.6559919914873,117.560335159971,95.086543752482,61.0029121371595,56.3514079541107,-58.4494515815322,59.307448743283,89.0641614069072,48.5996041053349,105.860487469592,117.720677571262,106.710886876867,42.6212735274133,86.6821209699423,79.8176336637951,72.6688609057315,-51.0540061421418,119.772818567133,32.3535006760291,121.497792239543,121.817128911284,42.4708370942835,88.2026459644922,72.7852521210323,120.424686681574,68.9785510981991,117.826604198481,1.00538314942996,61.2918762844756,70.459609563087,106.547964114086,49.3648268134546,4.64662827079246,53.5723910309432,39.2425956695692,33.5137542386629,72.7497047342216,97.4139422811351,119.583285847069,-74.8478354703528,80.1870347471224,16.4639499808215,126.664711478284,-16.5016747936407,19.2612735208918,124.356337091253,-36.4116339636635,3.43863518179111,30.4693318443501,116.805577236262,-97.7965692705667,40.1346880542406,117.963002160459,86.9687663253489,83.16790923049,-105.440641096009,-89.3951318646462,74.1611666731914,79.7857260005067,125.56139015125,36.0868977385588,8.27866092458879,83.1592372800496,90.337758338575,72.3923593736118,80.1476534367069,119.292771459961,139.843395949028,0.47073885562327,135.446109046831,40.5014846318017,-41.0286037713367,118.911459435909,14.5979284190251,-92.3741420324238,61.0723853911149,87.3659739515258,122.149982620126,36.2776981683634,91.8147390189622,-4.00798681549971,106.748565915303,-102.190523230415,3.40493456497715,34.9922824674885],[2.30682252622088,2.28588348065197,0.703818411942282,0.61497649273926,0.58664278836805,0.567080337681878,0.427476654026306,0.392070931703106,0.357426594819551,0.311211387223083,0.296357177407761,0.289034726784644,0.270207730180781,0.253408860771455,0.225415382920604,0.207638205272669,0.203890980410272,0.203689286896078,0.197464834532559,0.196631645377472,0.193291571263833,0.184494945284752,0.170052603110207,0.169526430742937,0.166520624502482,0.158974403980074,0.149803086060447,0.144660492804549,0.141318014316688,0.137163945380452,0.136049435291539,0.133478081949253,0.130105590020228,0.128758553637567,0.116391231334042,0.113896608057071,0.113171139208525,0.104234440548139,0.103379250045549,0.101682661450351,0.101635498968104,0.101440725690771,0.0950972624874227,0.0940456628175079,0.092345705594381,0.0902418731332231,0.0891732015276765,0.0749951241116263,0.0725584413836577,0.0699753279749586,0.0693846486591193,0.0666888401994701,0.0653888886747946,0.0639166406772546,0.060414094151616,0.0584321811623376,0.0581240100834793,0.0578260608399571,0.0577760841044592,0.057220557347025,0.055425847253856,0.0531840471356341,0.0530270772428405,0.0499715007493048,0.0498763699958085,0.0490334225395952,0.0475255658229036,0.047463110447139,0.0473980787790656,0.0450518669147305,0.0441277208583511,0.0423577712703611,0.0419912102338292,0.0418210147907346,0.0415411038064988,0.0414458262929047,0.0413458232172676,0.0411187105744768,0.041114756548774,0.0388896576211994,0.0386090586968479,0.0379891941750369,0.0378626701206665,0.0348062409989261,0.0344522781944084,0.033844690328691,0.0333138277233948,0.0331012900365527,0.0330741434458674,0.0324811941851873,0.0320571566483801,0.0319766841832395,0.0318881568687243,0.0298991936412783,0.0298637625124549,0.0293857345556928,0.0281262177494774,0.0277192891983734,0.0276784069615451,0.0276585542543296],null,"Top 100 FIO pourpoints",{"interactive":true,"className":"","stroke":true,"color":"darkred","weight":2,"opacity":0.75,"fill":true,"fillColor":"darkred","fillOpacity":0},null,null,[23068225.2622088,22858834.8065197,7038184.11942283,6149764.9273926,5866427.8836805,5670803.37681878,4274766.54026306,3920709.31703106,3574265.94819551,3112113.87223083,2963571.77407761,2890347.26784644,2702077.30180781,2534088.60771455,2254153.82920604,2076382.05272669,2038909.80410272,2036892.86896078,1974648.34532559,1966316.45377472,1932915.71263833,1844949.45284752,1700526.03110207,1695264.30742937,1665206.24502482,1589744.03980074,1498030.86060447,1446604.92804549,1413180.14316688,1371639.45380452,1360494.35291539,1334780.81949253,1301055.90020228,1287585.53637567,1163912.31334042,1138966.08057071,1131711.39208525,1042344.40548139,1033792.50045549,1016826.61450351,1016354.98968104,1014407.25690771,950972.624874227,940456.628175079,923457.05594381,902418.731332231,891732.015276765,749951.241116263,725584.413836577,699753.279749586,693846.486591193,666888.401994701,653888.886747946,639166.406772546,604140.94151616,584321.811623376,581240.100834793,578260.608399571,577760.841044592,572205.57347025,554258.47253856,531840.471356341,530270.772428405,499715.007493048,498763.699958085,490334.225395952,475255.658229036,474631.10447139,473980.787790656,450518.669147305,441277.208583511,423577.712703611,419912.102338292,418210.147907346,415411.038064988,414458.262929047,413458.232172676,411187.105744768,411147.56548774,388896.576211994,386090.586968479,379891.941750369,378626.701206665,348062.409989261,344522.781944084,338446.90328691,333138.277233948,331012.900365527,330741.434458674,324811.941851873,320571.566483801,319766.841832395,318881.568687243,298991.936412783,298637.625124549,293857.345556928,281262.177494774,277192.891983734,276784.069615451,276585.542543296],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addCircleMarkers","args":[[31.9435019927264,22.7789481668791,22.2033716697359,31.2915443490667,37.7663370463148,45.2397054518908,53.1260961704591,24.0600512590136,51.7195133989005,4.30700513043226,45.6935260393618,28.9426086594032,38.7633422054301,39.0932287667134,-34.0058875702767,40.0075213740855,34.4438439855339,15.7664609936265,31.3857806976889,29.9373672944778,-6.05578206204655,16.7247669676389,23.734588154819,40.9532550905203,53.6941863315153,54.2700778662875,16.0042110684916,34.6483393885383,12.9649492932609,66.7890110985508,10.2114010785921,38.26892066412,46.5161675827207,44.9654368945764,43.691029395214,30.3790389186769,49.4782823967192,-0.655024560245932,37.7621278933377,-18.7944131940188,43.7780271013294,22.2914586581584,53.5999446510318,51.4693171345409,20.2962187305727,21.9497950303371,47.144250088318,21.6344619090671,43.3556897253449,31.5087961692681,38.1956247666637,39.3580589209818,20.3038195218766,26.1300362840712,11.3643186876756,21.1548772927068,-0.242460879572887,11.1091563313404,53.6882539111951,39.0048580672829,35.6776444213018,47.2979506636751,40.5304601980106,23.3961399230048,5.95312501297857,16.5364600552916,40.0042192004059,53.3654989272291,-10.4945762019839,22.1181434585625,21.656305889993,34.7092526568523,51.3493808601762,11.6292403822232,25.9512640586657,31.4752509647119,70.0570970486711,22.9904989312565,44.8373446662154,-25.1916574286487,17.9386755575204,46.8287208227032,39.9678394564855,-28.6200504289136,37.2772899277229,39.4251446954708,31.6194046919283,40.690391707397,38.6877463832315,31.8737815196968,45.2191346680274,36.0665527251581,45.3188316432485,33.9792257456746,41.1323662397163,16.0466025827776,33.8078013893596,35.1904715828956,35.7466771379231,46.0791753199362],[120.258344007731,90.7473396331288,113.40262766623,30.254591502087,119.208561385331,29.7207040750822,140.72238913343,67.4152702311979,4.64662827079246,6.22985943924716,47.6559919914873,-89.3951318646462,117.560335159971,117.720677571262,-58.4494515815322,105.860487469592,119.772818567133,81.002151664495,121.497792239543,48.5996041053349,12.4407065777401,82.3471770722109,68.4201642054009,121.817128911284,9.49614493346677,19.2612735208918,95.086543752482,56.3514079541107,14.4543179653997,68.9785510981991,106.710886876867,117.826604198481,32.3535006760291,12.5278312031827,61.0029121371595,120.424686681574,0.47073885562327,-51.0540061421418,126.664711478284,36.2536708903772,59.307448743283,-97.7965692705667,14.5979284190251,0.254375976843254,106.547964114086,89.0641614069072,39.2425956695692,-105.440641096009,4.83555797285721,31.8244200424694,117.963002160459,49.3648268134546,86.6821209699423,119.583285847069,79.8176336637951,72.6688609057315,42.6212735274133,-74.8478354703528,-0.69336673993468,-8.94372245823232,139.843395949028,-1.99315574076853,90.337758338575,116.805577236262,1.00538314942996,97.4139422811351,124.356337091253,8.50843630754711,-36.4116339636635,88.2026459644922,72.7852521210323,135.446109046831,4.25687756596592,42.4708370942835,-97.1513163268241,61.2918762844756,83.16790923049,70.459609563087,83.1592372800496,33.5137542386629,-102.190523230415,-71.2009821017883,53.5723910309432,16.4639499808215,118.911459435909,119.292771459961,35.5044715729294,122.149982620126,125.56139015125,-114.89036925276,-0.711934068006027,35.9670451038233,74.1611666731914,9.81762072007472,30.6548441838932,-16.5016747936407,120.477571356805,128.96704421919,140.847028069037,30.4693318443501],[10.3850305445185,4.40382213227009,2.5969842692508,1.99475602423447,1.92769881728725,1.54699649929885,1.40117064294298,1.38313083202228,1.37566870633078,1.26559488529978,1.16305634096729,1.07914752137702,1.02710505700271,0.798495335058778,0.7958106876262,0.720483084805568,0.687218647404874,0.678204976699414,0.669502365568512,0.665235716920081,0.62662466737155,0.590514196928957,0.590015358438367,0.550410097105397,0.5218830221017,0.514692237872014,0.513508016731067,0.512697691861236,0.511099008061367,0.492540522160512,0.48632373674122,0.485667022294265,0.485146272029037,0.482137194733661,0.479182466131294,0.463252041609141,0.436233779588051,0.407328189924857,0.382521669593931,0.374933346078389,0.357851346063127,0.350593423923835,0.340304567219814,0.335628423343377,0.325357792029701,0.309016101985298,0.304285748053051,0.301735344138828,0.285638803034957,0.282220424388361,0.279199116711964,0.270126582902464,0.268466095644898,0.266055226365104,0.261036102469686,0.25658515672526,0.238292851513897,0.232448418759068,0.231022308186252,0.225435049467875,0.223908530070472,0.22022201881855,0.211822445909221,0.209596800645721,0.208006677351598,0.205307013600519,0.202012587771176,0.201545917043354,0.201486183035244,0.199774585790966,0.195332982517089,0.191384743087317,0.188804457279242,0.184316455398009,0.183194160852989,0.180764829607427,0.178695545225988,0.177010071604054,0.176559860269111,0.174877687961483,0.173234722330701,0.171329645755179,0.160314432300063,0.160235453958735,0.155667548910747,0.154668227827939,0.152131429471483,0.151225665002654,0.149667250858042,0.145736287099756,0.144295189297371,0.142869350879929,0.14276567007266,0.139747967812432,0.138408631671469,0.134276846833353,0.132111932925919,0.132098744944641,0.129088802080812,0.128618331999588],null,"Top 100 Nitrogen pourpoints",{"interactive":true,"className":"","stroke":true,"color":"forestgreen","weight":2,"opacity":0.75,"fill":true,"fillColor":"forestgreen","fillOpacity":0},null,null,[1038503054451.85,440382213227.009,259698426925.08,199475602423.447,192769881728.725,154699649929.885,140117064294.298,138313083202.228,137566870633.078,126559488529.978,116305634096.729,107914752137.702,102710505700.271,79849533505.8778,79581068762.62,72048308480.5568,68721864740.4875,67820497669.9414,66950236556.8512,66523571692.0081,62662466737.155,59051419692.8957,59001535843.8367,55041009710.5397,52188302210.1701,51469223787.2014,51350801673.1067,51269769186.1236,51109900806.1367,49254052216.0512,48632373674.122,48566702229.4265,48514627202.9037,48213719473.3661,47918246613.1294,46325204160.9141,43623377958.8051,40732818992.4857,38252166959.3931,37493334607.8389,35785134606.3127,35059342392.3835,34030456721.9814,33562842334.3377,32535779202.9701,30901610198.5298,30428574805.3051,30173534413.8828,28563880303.4957,28222042438.8361,27919911671.1964,27012658290.2464,26846609564.4898,26605522636.5104,26103610246.9686,25658515672.526,23829285151.3897,23244841875.9068,23102230818.6252,22543504946.7875,22390853007.0472,22022201881.855,21182244590.9221,20959680064.5721,20800667735.1598,20530701360.0519,20201258777.1176,20154591704.3354,20148618303.5244,19977458579.0966,19533298251.7089,19138474308.7317,18880445727.9242,18431645539.8009,18319416085.2989,18076482960.7427,17869554522.5988,17701007160.4054,17655986026.9111,17487768796.1483,17323472233.0701,17132964575.518,16031443230.0063,16023545395.8735,15566754891.0747,15466822782.7939,15213142947.1483,15122566500.2654,14966725085.8042,14573628709.9756,14429518929.7371,14286935087.9929,14276567007.266,13974796781.2432,13840863167.1469,13427684683.3353,13211193292.5919,13209874494.4641,12908880208.0812,12861833199.9588],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addLayersControl","args":[["Map","Imagery"],["Place Names","FIO source","Top 100 FIO pourpoints","FIO plumes","Nitrogen source","Top 100 Nitrogen pourpoints","Nitrogen plumes"],{"collapsed":false,"autoZIndex":true,"position":"topright"}]},{"method":"hideGroup","args":[["Nitrogen source","Top 100 Nitrogen pourpoints","Nitrogen plumes"]]}],"limits":{"lat":[-34.0058875702767,70.0570970486711],"lng":[-114.89036925276,140.847028069037]}},"evals":[],"jsHooks":[]}</script>
-<script type="application/htmlwidget-sizing" data-for="htmlwidget-f0d01cbe36897dac35c2">{"viewer":{"width":"100%","height":400,"padding":0,"fill":true},"browser":{"width":"100%","height":400,"padding":0,"fill":true}}</script>
+<script type="application/json" data-for="htmlwidget-007b2ba43976876176d3">{"x":{"options":{"crs":{"crsClass":"L.CRS.EPSG3857","code":null,"proj4def":null,"projectedBounds":null,"options":{}}},"calls":[{"method":"addTiles","args":["https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png",null,"Map",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":false,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false,"attribution":"&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap<\/a> contributors &copy; <a href=\"https://carto.com/attributions\">CARTO<\/a>"}]},{"method":"addProviderTiles","args":["CartoDB.DarkMatterNoLabels",null,"Dark Mode",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":false,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false}]},{"method":"addTiles","args":["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",null,"Imagery",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":false,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false,"attribution":"Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"}]},{"method":"addTiles","args":["https://mazu.nceas.ucsb.edu/wastewater/FIO_effluent/{z}/{x}/{y}.png",null,"FIO source",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":true,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false}]},{"method":"addTiles","args":["https://mazu.nceas.ucsb.edu/wastewater/N_effluent/{z}/{x}/{y}.png",null,"Nitrogen source",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":true,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false}]},{"method":"addTiles","args":["https://mazu.nceas.ucsb.edu/wastewater/FIO_plumes/{z}/{x}/{y}.png",null,"FIO plumes",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":true,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false}]},{"method":"addTiles","args":["https://mazu.nceas.ucsb.edu/wastewater/N_plumes/{z}/{x}/{y}.png",null,"Nitrogen plumes",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":true,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false}]},{"method":"addLegend","args":[{"colors":["#FFEFD7","#FEC875","#FEA53C","#993404","#FF00FF"],"labels":["> 0.01","1","100","1000","10,000"],"na_color":null,"na_label":"NA","opacity":0.9,"position":"bottomleft","type":"unknown","title":"FIO (unitless)","extra":null,"layerId":null,"className":"info legend","group":"FIO"}]},{"method":"addLegend","args":[{"colors":["#FEA53C","#993404","#CDFF02","\t#04FFA7","#4904A2"],"labels":["100,000","1,000,000","10,000,000","100,000,000","1,000,000,000"],"na_color":null,"na_label":"NA","opacity":0.9,"position":"bottomleft","type":"unknown","title":"Nitrogen Grams/Year","extra":null,"layerId":null,"className":"info legend","group":"FIO"}]},{"method":"addTiles","args":["https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png",null,"Place Names",{"minZoom":1,"maxZoom":8,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":false,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":0.35,"zIndex":1,"detectRetina":false}]},{"method":"addCircleMarkers","args":[[22.7789481668791,31.9435019927264,31.2915443490667,24.0600512590136,4.30700513043226,22.2033716697359,37.7663370463148,-6.05578206204655,15.7664609936265,16.7247669676389,53.1260961704591,23.734588154819,45.2397054518908,12.9649492932609,-18.7944131940188,45.6935260393618,38.7633422054301,16.0042110684916,43.691029395214,34.6483393885383,-34.0058875702767,43.7780271013294,21.9497950303371,29.9373672944778,40.0075213740855,39.0932287667134,10.2114010785921,-0.242460879572887,20.3038195218766,11.3643186876756,21.1548772927068,-0.655024560245932,34.4438439855339,46.5161675827207,31.3857806976889,40.9532550905203,11.6292403822232,22.1181434585625,21.656305889993,30.3790389186769,66.7890110985508,38.26892066412,5.95312501297857,31.4752509647119,22.9904989312565,20.2962187305727,39.3580589209818,51.7195133989005,39.9678394564855,47.144250088318,-25.1916574286487,22.2290778371454,16.5364600552916,26.1300362840712,11.1091563313404,14.5964853335245,-28.6200504289136,37.7621278933377,16.0466025827776,54.2700778662875,40.0042192004059,-10.4945762019839,6.41819221779139,46.0791753199362,23.3961399230048,22.2914586581584,-3.15465864539301,38.1956247666637,20.7852738154694,70.0570970486711,21.6344619090671,28.9426086594032,45.3188316432485,11.776693625502,38.6877463832315,4.64508268658366,4.86001551726502,44.8373446662154,40.5304601980106,22.3341121436566,12.4684040810253,39.4251446954708,35.6776444213018,49.4782823967192,34.7092526568523,-2.51929638442138,-21.61886723146,37.2772899277229,53.5999446510318,18.6747745532555,45.9460412399957,21.5616268541398,40.690391707397,3.7727385242586,22.2247635394064,5.25264218116306,10.4740980291567,17.9386755575204,6.41729004883286,-21.0520682309922],[90.7473396331288,120.258344007731,30.254591502087,67.4152702311979,6.22985943924716,113.40262766623,119.208561385331,12.4407065777401,81.002151664495,82.3471770722109,140.72238913343,68.4201642054009,29.7207040750822,14.4543179653997,36.2536708903772,47.6559919914873,117.560335159971,95.086543752482,61.0029121371595,56.3514079541107,-58.4494515815322,59.307448743283,89.0641614069072,48.5996041053349,105.860487469592,117.720677571262,106.710886876867,42.6212735274133,86.6821209699423,79.8176336637951,72.6688609057315,-51.0540061421418,119.772818567133,32.3535006760291,121.497792239543,121.817128911284,42.4708370942835,88.2026459644922,72.7852521210323,120.424686681574,68.9785510981991,117.826604198481,1.00538314942996,61.2918762844756,70.459609563087,106.547964114086,49.3648268134546,4.64662827079246,53.5723910309432,39.2425956695692,33.5137542386629,72.7497047342216,97.4139422811351,119.583285847069,-74.8478354703528,80.1870347471224,16.4639499808215,126.664711478284,-16.5016747936407,19.2612735208918,124.356337091253,-36.4116339636635,3.43863518179111,30.4693318443501,116.805577236262,-97.7965692705667,40.1346880542406,117.963002160459,86.9687663253489,83.16790923049,-105.440641096009,-89.3951318646462,74.1611666731914,79.7857260005067,125.56139015125,36.0868977385588,8.27866092458879,83.1592372800496,90.337758338575,72.3923593736118,80.1476534367069,119.292771459961,139.843395949028,0.47073885562327,135.446109046831,40.5014846318017,-41.0286037713367,118.911459435909,14.5979284190251,-92.3741420324238,61.0723853911149,87.3659739515258,122.149982620126,36.2776981683634,91.8147390189622,-4.00798681549971,106.748565915303,-102.190523230415,3.40493456497715,34.9922824674885],[23.0682252622088,22.8588348065197,7.03818411942282,6.1497649273926,5.8664278836805,5.67080337681878,4.27476654026306,3.92070931703106,3.57426594819551,3.11211387223083,2.96357177407761,2.89034726784644,2.70207730180781,2.53408860771455,2.25415382920604,2.07638205272669,2.03890980410272,2.03689286896078,1.97464834532559,1.96631645377472,1.93291571263833,1.84494945284752,1.70052603110207,1.69526430742937,1.66520624502482,1.58974403980074,1.49803086060447,1.44660492804549,1.41318014316688,1.37163945380452,1.36049435291539,1.33478081949253,1.30105590020228,1.28758553637567,1.16391231334042,1.13896608057071,1.13171139208525,1.04234440548139,1.03379250045549,1.01682661450351,1.01635498968104,1.01440725690771,0.950972624874227,0.940456628175079,0.92345705594381,0.902418731332231,0.891732015276765,0.749951241116263,0.725584413836577,0.699753279749586,0.693846486591193,0.666888401994701,0.653888886747946,0.639166406772546,0.60414094151616,0.584321811623376,0.581240100834793,0.578260608399571,0.577760841044592,0.57220557347025,0.55425847253856,0.531840471356341,0.530270772428405,0.499715007493048,0.498763699958085,0.490334225395952,0.475255658229036,0.47463110447139,0.473980787790656,0.450518669147305,0.441277208583511,0.423577712703611,0.419912102338292,0.418210147907346,0.415411038064988,0.414458262929047,0.413458232172676,0.411187105744768,0.41114756548774,0.388896576211994,0.386090586968479,0.379891941750369,0.378626701206665,0.348062409989261,0.344522781944084,0.33844690328691,0.333138277233948,0.331012900365527,0.330741434458674,0.324811941851873,0.320571566483801,0.319766841832395,0.318881568687243,0.298991936412783,0.298637625124549,0.293857345556928,0.281262177494774,0.277192891983734,0.276784069615451,0.276585542543296],null,"Top 100 FIO pourpoints",{"interactive":true,"className":"","stroke":false,"color":"darkred","weight":2,"opacity":0.75,"fill":true,"fillColor":"darkred","fillOpacity":0.75},null,null,["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46","47","48","49","50","51","52","53","54","55","56","57","58","59","60","61","62","63","64","65","66","67","68","69","70","71","72","73","74","75","76","77","78","79","80","81","82","83","84","85","86","87","88","89","90","91","92","93","94","95","96","97","98","99","100"],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addCircleMarkers","args":[[31.9435019927264,22.7789481668791,22.2033716697359,31.2915443490667,37.7663370463148,45.2397054518908,53.1260961704591,24.0600512590136,51.7195133989005,4.30700513043226,45.6935260393618,28.9426086594032,38.7633422054301,39.0932287667134,-34.0058875702767,40.0075213740855,34.4438439855339,15.7664609936265,31.3857806976889,29.9373672944778,-6.05578206204655,16.7247669676389,23.734588154819,40.9532550905203,53.6941863315153,54.2700778662875,16.0042110684916,34.6483393885383,12.9649492932609,66.7890110985508,10.2114010785921,38.26892066412,46.5161675827207,44.9654368945764,43.691029395214,30.3790389186769,49.4782823967192,-0.655024560245932,37.7621278933377,-18.7944131940188,43.7780271013294,22.2914586581584,53.5999446510318,51.4693171345409,20.2962187305727,21.9497950303371,47.144250088318,21.6344619090671,43.3556897253449,31.5087961692681,38.1956247666637,39.3580589209818,20.3038195218766,26.1300362840712,11.3643186876756,21.1548772927068,-0.242460879572887,11.1091563313404,53.6882539111951,39.0048580672829,35.6776444213018,47.2979506636751,40.5304601980106,23.3961399230048,5.95312501297857,16.5364600552916,40.0042192004059,53.3654989272291,-10.4945762019839,22.1181434585625,21.656305889993,34.7092526568523,51.3493808601762,11.6292403822232,25.9512640586657,31.4752509647119,70.0570970486711,22.9904989312565,44.8373446662154,-25.1916574286487,17.9386755575204,46.8287208227032,39.9678394564855,-28.6200504289136,37.2772899277229,39.4251446954708,31.6194046919283,40.690391707397,38.6877463832315,31.8737815196968,45.2191346680274,36.0665527251581,45.3188316432485,33.9792257456746,41.1323662397163,16.0466025827776,33.8078013893596,35.1904715828956,35.7466771379231,46.0791753199362],[120.258344007731,90.7473396331288,113.40262766623,30.254591502087,119.208561385331,29.7207040750822,140.72238913343,67.4152702311979,4.64662827079246,6.22985943924716,47.6559919914873,-89.3951318646462,117.560335159971,117.720677571262,-58.4494515815322,105.860487469592,119.772818567133,81.002151664495,121.497792239543,48.5996041053349,12.4407065777401,82.3471770722109,68.4201642054009,121.817128911284,9.49614493346677,19.2612735208918,95.086543752482,56.3514079541107,14.4543179653997,68.9785510981991,106.710886876867,117.826604198481,32.3535006760291,12.5278312031827,61.0029121371595,120.424686681574,0.47073885562327,-51.0540061421418,126.664711478284,36.2536708903772,59.307448743283,-97.7965692705667,14.5979284190251,0.254375976843254,106.547964114086,89.0641614069072,39.2425956695692,-105.440641096009,4.83555797285721,31.8244200424694,117.963002160459,49.3648268134546,86.6821209699423,119.583285847069,79.8176336637951,72.6688609057315,42.6212735274133,-74.8478354703528,-0.69336673993468,-8.94372245823232,139.843395949028,-1.99315574076853,90.337758338575,116.805577236262,1.00538314942996,97.4139422811351,124.356337091253,8.50843630754711,-36.4116339636635,88.2026459644922,72.7852521210323,135.446109046831,4.25687756596592,42.4708370942835,-97.1513163268241,61.2918762844756,83.16790923049,70.459609563087,83.1592372800496,33.5137542386629,-102.190523230415,-71.2009821017883,53.5723910309432,16.4639499808215,118.911459435909,119.292771459961,35.5044715729294,122.149982620126,125.56139015125,-114.89036925276,-0.711934068006027,35.9670451038233,74.1611666731914,9.81762072007472,30.6548441838932,-16.5016747936407,120.477571356805,128.96704421919,140.847028069037,30.4693318443501],[10.3850305445185,4.40382213227009,2.5969842692508,1.99475602423447,1.92769881728725,1.54699649929885,1.40117064294298,1.38313083202228,1.37566870633078,1.26559488529978,1.16305634096729,1.07914752137702,1.02710505700271,0.798495335058778,0.7958106876262,0.720483084805568,0.687218647404874,0.678204976699414,0.669502365568512,0.665235716920081,0.62662466737155,0.590514196928957,0.590015358438367,0.550410097105397,0.5218830221017,0.514692237872014,0.513508016731067,0.512697691861236,0.511099008061367,0.492540522160512,0.48632373674122,0.485667022294265,0.485146272029037,0.482137194733661,0.479182466131294,0.463252041609141,0.436233779588051,0.407328189924857,0.382521669593931,0.374933346078389,0.357851346063127,0.350593423923835,0.340304567219814,0.335628423343377,0.325357792029701,0.309016101985298,0.304285748053051,0.301735344138828,0.285638803034957,0.282220424388361,0.279199116711964,0.270126582902464,0.268466095644898,0.266055226365104,0.261036102469686,0.25658515672526,0.238292851513897,0.232448418759068,0.231022308186252,0.225435049467875,0.223908530070472,0.22022201881855,0.211822445909221,0.209596800645721,0.208006677351598,0.205307013600519,0.202012587771176,0.201545917043354,0.201486183035244,0.199774585790966,0.195332982517089,0.191384743087317,0.188804457279242,0.184316455398009,0.183194160852989,0.180764829607427,0.178695545225988,0.177010071604054,0.176559860269111,0.174877687961483,0.173234722330701,0.171329645755179,0.160314432300063,0.160235453958735,0.155667548910747,0.154668227827939,0.152131429471483,0.151225665002654,0.149667250858042,0.145736287099756,0.144295189297371,0.142869350879929,0.14276567007266,0.139747967812432,0.138408631671469,0.134276846833353,0.132111932925919,0.132098744944641,0.129088802080812,0.128618331999588],null,"Top 100 Nitrogen pourpoints",{"interactive":true,"className":"","stroke":true,"color":"forestgreen","weight":2,"opacity":0.75,"fill":true,"fillColor":"forestgreen","fillOpacity":0},null,null,[1038503054451.85,440382213227.009,259698426925.08,199475602423.447,192769881728.725,154699649929.885,140117064294.298,138313083202.228,137566870633.078,126559488529.978,116305634096.729,107914752137.702,102710505700.271,79849533505.8778,79581068762.62,72048308480.5568,68721864740.4875,67820497669.9414,66950236556.8512,66523571692.0081,62662466737.155,59051419692.8957,59001535843.8367,55041009710.5397,52188302210.1701,51469223787.2014,51350801673.1067,51269769186.1236,51109900806.1367,49254052216.0512,48632373674.122,48566702229.4265,48514627202.9037,48213719473.3661,47918246613.1294,46325204160.9141,43623377958.8051,40732818992.4857,38252166959.3931,37493334607.8389,35785134606.3127,35059342392.3835,34030456721.9814,33562842334.3377,32535779202.9701,30901610198.5298,30428574805.3051,30173534413.8828,28563880303.4957,28222042438.8361,27919911671.1964,27012658290.2464,26846609564.4898,26605522636.5104,26103610246.9686,25658515672.526,23829285151.3897,23244841875.9068,23102230818.6252,22543504946.7875,22390853007.0472,22022201881.855,21182244590.9221,20959680064.5721,20800667735.1598,20530701360.0519,20201258777.1176,20154591704.3354,20148618303.5244,19977458579.0966,19533298251.7089,19138474308.7317,18880445727.9242,18431645539.8009,18319416085.2989,18076482960.7427,17869554522.5988,17701007160.4054,17655986026.9111,17487768796.1483,17323472233.0701,17132964575.518,16031443230.0063,16023545395.8735,15566754891.0747,15466822782.7939,15213142947.1483,15122566500.2654,14966725085.8042,14573628709.9756,14429518929.7371,14286935087.9929,14276567007.266,13974796781.2432,13840863167.1469,13427684683.3353,13211193292.5919,13209874494.4641,12908880208.0812,12861833199.9588],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addLayersControl","args":[["Map","Dark Mode","Imagery"],["Place Names","FIO source","Top 100 FIO pourpoints","FIO plumes","Nitrogen source","Top 100 Nitrogen pourpoints","Nitrogen plumes"],{"collapsed":false,"autoZIndex":true,"position":"topright"}]},{"method":"hideGroup","args":[["Nitrogen source","Top 100 Nitrogen pourpoints","Nitrogen plumes"]]}],"limits":{"lat":[-34.0058875702767,70.0570970486711],"lng":[-114.89036925276,140.847028069037]}},"evals":[],"jsHooks":[]}</script>
+<script type="application/htmlwidget-sizing" data-for="htmlwidget-007b2ba43976876176d3">{"viewer":{"width":"100%","height":400,"padding":0,"fill":true},"browser":{"width":"100%","height":400,"padding":0,"fill":true}}</script>
 </body>
 </html>
