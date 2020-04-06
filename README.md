@@ -1,4 +1,4 @@
-# Wastewater-Webmap
+# Wastewater webmap
 https://gordonblasco.github.io/Wastewater-Webmap/webmap.html
 
 
