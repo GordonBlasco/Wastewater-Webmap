@@ -1,6 +1,1 @@
-# Wastewater webmap
-https://gordonblasco.github.io/Wastewater-Webmap/webmap.html
-
-
-# Pourpoint webmap
-https://gordonblasco.github.io/Wastewater-Webmap/pourpoint_webmap.html
+### See the visualization for our paper [here](http://www.globalwastewatermodel.com/webmap.html).
